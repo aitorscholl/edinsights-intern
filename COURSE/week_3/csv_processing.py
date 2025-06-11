@@ -8,6 +8,7 @@ standard library and pandas.
 
 import csv
 import pandas as pd
+import os
 
 
 def read_csv_standard(filepath, has_header=True):
@@ -26,8 +27,23 @@ def read_csv_standard(filepath, has_header=True):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"The file {filepath} does not exist")
+    
+    headers = None
+    data = []
+    
+    with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        
+        if has_header:
+            headers = next(reader)
+        
+        for row in reader:
+            data.append(row)
+    
+    return headers, data
+
 
 def write_csv_standard(filepath, data, headers=None):
     """
@@ -44,8 +60,19 @@ def write_csv_standard(filepath, data, headers=None):
     Raises:
         IOError: If writing to the file fails
     """
-    # YOUR CODE HERE
-    pass
+    try:
+        with open(filepath, 'w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            
+            if headers:
+                writer.writerow(headers)
+            
+            writer.writerows(data)
+        
+        return True
+    except IOError as e:
+        raise IOError(f"Failed to write to file {filepath}: {e}")
+
 
 def filter_csv_rows(filepath, filter_func, output_filepath=None):
     """
@@ -65,8 +92,29 @@ def filter_csv_rows(filepath, filter_func, output_filepath=None):
     Raises:
         FileNotFoundError: If the input file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"The file {filepath} does not exist")
+    
+    filtered_rows = []
+    
+    with open(filepath, 'r', newline='', encoding='utf-8') as csvfile:
+        reader = csv.DictReader(csvfile)
+        
+        for row in reader:
+            if filter_func(row):
+                filtered_rows.append(row)
+    
+    if output_filepath:
+        if filtered_rows:
+            with open(output_filepath, 'w', newline='', encoding='utf-8') as csvfile:
+                fieldnames = filtered_rows[0].keys()
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(filtered_rows)
+        return []
+    
+    return filtered_rows
+
 
 def read_csv_pandas(filepath):
     """
@@ -81,8 +129,11 @@ def read_csv_pandas(filepath):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"The file {filepath} does not exist")
+    
+    return pd.read_csv(filepath)
+
 
 def write_csv_pandas(filepath, dataframe):
     """
@@ -98,8 +149,12 @@ def write_csv_pandas(filepath, dataframe):
     Raises:
         IOError: If writing to the file fails
     """
-    # YOUR CODE HERE
-    pass
+    try:
+        dataframe.to_csv(filepath, index=False)
+        return True
+    except IOError as e:
+        raise IOError(f"Failed to write to file {filepath}: {e}")
+
 
 def filter_csv_pandas(filepath, filter_func, output_filepath=None):
     """
@@ -119,8 +174,18 @@ def filter_csv_pandas(filepath, filter_func, output_filepath=None):
     Raises:
         FileNotFoundError: If the input file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    df = read_csv_pandas(filepath)
+    
+    # Apply filter function to each row
+    mask = df.apply(filter_func, axis=1)
+    filtered_df = df[mask]
+    
+    if output_filepath:
+        write_csv_pandas(output_filepath, filtered_df)
+        return pd.DataFrame()
+    
+    return filtered_df
+
 
 def aggregate_csv_data(filepath, group_by, agg_functions):
     """
@@ -138,8 +203,14 @@ def aggregate_csv_data(filepath, group_by, agg_functions):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    df = read_csv_pandas(filepath)
+    
+    # Group by the specified column(s) and apply aggregation functions
+    grouped = df.groupby(group_by).agg(agg_functions)
+    
+    # Reset index to make grouped columns regular columns
+    return grouped.reset_index()
+
 
 def merge_csv_files(filepath1, filepath2, merge_on, how='inner'):
     """
@@ -159,8 +230,11 @@ def merge_csv_files(filepath1, filepath2, merge_on, how='inner'):
     Raises:
         FileNotFoundError: If either file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    df1 = read_csv_pandas(filepath1)
+    df2 = read_csv_pandas(filepath2)
+    
+    return pd.merge(df1, df2, on=merge_on, how=how)
+
 
 def main():
     """Run examples to test your functions."""
@@ -201,10 +275,35 @@ def main():
     agg_df = aggregate_csv_data(sample_file, 'city', {'age': 'mean'})
     print(agg_df)
     
+    # Test pandas filtering
+    print("\nFiltering with pandas (age > 28):")
+    def pandas_age_filter(row):
+        return int(row['age']) > 28
+    filtered_df = filter_csv_pandas(sample_file, pandas_age_filter)
+    print(filtered_df)
+    
+    # Test merging (create a second file for demonstration)
+    sample_data2 = [
+        ['id', 'salary', 'department'],
+        ['1', '75000', 'Engineering'],
+        ['2', '65000', 'Marketing'],
+        ['3', '80000', 'Engineering'],
+        ['5', '70000', 'Sales']
+    ]
+    sample_file2 = "sample2.csv"
+    with open(sample_file2, 'w', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerows(sample_data2)
+    
+    print("\nMerging two CSV files:")
+    merged_df = merge_csv_files(sample_file, sample_file2, 'id', 'inner')
+    print(merged_df)
+    
     # Clean up
-    import os
     os.remove(sample_file)
-    print(f"\nCleaned up sample file: {sample_file}")
+    os.remove(sample_file2)
+    print(f"\nCleaned up sample files")
+
 
 if __name__ == "__main__":
     main()

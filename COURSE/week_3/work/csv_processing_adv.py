@@ -8,8 +8,14 @@ This exercise focuses on working with JSON data in Python.
 import json
 import os
 import csv
+from typing import Dict, List, Union, Tuple, Any, Optional
 
-def read_json_file(filepath):
+# Type aliases for clarity
+JSONData = Union[Dict[str, Any], List[Any]]
+SchemaType = Dict[str, Dict[str, Union[str, bool]]]
+ValidationResult = Tuple[bool, List[str]]
+
+def read_json_file(filepath: str) -> JSONData:
     """
     Read and parse a JSON file.
     
@@ -29,7 +35,7 @@ def read_json_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         return json.load(f)
 
-def write_json_file(filepath, data, indent=2):
+def write_json_file(filepath: str, data: JSONData, indent: int = 2) -> bool:
     """
     Write data to a JSON file.
     
@@ -51,7 +57,8 @@ def write_json_file(filepath, data, indent=2):
     except TypeError as e:
         raise TypeError(f"Data is not JSON serializable: {e}")
 
-def update_json_file(filepath, update_dict, create_if_not_exists=False):
+def update_json_file(filepath: str, update_dict: Dict[str, Any], 
+                    create_if_not_exists: bool = False) -> Dict[str, Any]:
     """
     Update a JSON file with new key-value pairs.
     If the file contains a dictionary, update the dictionary.
@@ -72,7 +79,7 @@ def update_json_file(filepath, update_dict, create_if_not_exists=False):
     """
     if not os.path.exists(filepath):
         if create_if_not_exists:
-            data = {}
+            data: Dict[str, Any] = {}
         else:
             raise FileNotFoundError(f"File not found: {filepath}")
     else:
@@ -85,7 +92,7 @@ def update_json_file(filepath, update_dict, create_if_not_exists=False):
     write_json_file(filepath, data)
     return data
 
-def search_json(data, key):
+def search_json(data: JSONData, key: str) -> List[Any]:
     """
     Search for all occurrences of a key in a JSON structure (recursive).
     
@@ -96,9 +103,9 @@ def search_json(data, key):
     Returns:
         list: List of values corresponding to the key
     """
-    results = []
+    results: List[Any] = []
     
-    def search_recursive(obj):
+    def search_recursive(obj: Any) -> None:
         if isinstance(obj, dict):
             for k, v in obj.items():
                 if k == key:
@@ -111,7 +118,7 @@ def search_json(data, key):
     search_recursive(data)
     return results
 
-def validate_json_schema(data, schema):
+def validate_json_schema(data: Dict[str, Any], schema: SchemaType) -> ValidationResult:
     """
     Validate a JSON object against a simple schema.
     
@@ -135,10 +142,10 @@ def validate_json_schema(data, schema):
         tuple: (is_valid, errors) where is_valid is a boolean and
                errors is a list of error messages (empty if valid)
     """
-    errors = []
+    errors: List[str] = []
     
     # Map string type names to Python types
-    type_map = {
+    type_map: Dict[str, type] = {
         'str': str,
         'int': int,
         'float': float,
@@ -165,7 +172,7 @@ def validate_json_schema(data, schema):
     is_valid = len(errors) == 0
     return is_valid, errors
 
-def convert_csv_to_json(csv_filepath, json_filepath, has_header=True):
+def convert_csv_to_json(csv_filepath: str, json_filepath: str, has_header: bool = True) -> bool:
     """
     Convert a CSV file to a JSON file.
     
@@ -183,7 +190,7 @@ def convert_csv_to_json(csv_filepath, json_filepath, has_header=True):
     if not os.path.exists(csv_filepath):
         raise FileNotFoundError(f"CSV file not found: {csv_filepath}")
     
-    data = []
+    data: List[Union[Dict[str, str], List[str]]] = []
     
     with open(csv_filepath, 'r', encoding='utf-8') as csvfile:
         if has_header:
@@ -198,7 +205,7 @@ def convert_csv_to_json(csv_filepath, json_filepath, has_header=True):
     write_json_file(json_filepath, data)
     return True
 
-def merge_json_files(filepaths, output_filepath):
+def merge_json_files(filepaths: List[str], output_filepath: str) -> JSONData:
     """
     Merge multiple JSON files into one. All files must contain either dictionaries or lists.
     
@@ -223,14 +230,14 @@ def merge_json_files(filepaths, output_filepath):
     first_data = read_json_file(filepaths[0])
     
     if isinstance(first_data, dict):
-        merged_data = {}
+        merged_data: Dict[str, Any] = {}
         for filepath in filepaths:
             data = read_json_file(filepath)
             if not isinstance(data, dict):
                 raise TypeError(f"File {filepath} contains {type(data).__name__}, but expected dict")
             merged_data.update(data)
     elif isinstance(first_data, list):
-        merged_data = []
+        merged_data: List[Any] = []
         for filepath in filepaths:
             data = read_json_file(filepath)
             if not isinstance(data, list):
@@ -242,7 +249,7 @@ def merge_json_files(filepaths, output_filepath):
     write_json_file(output_filepath, merged_data)
     return merged_data
 
-def pretty_print_json(data):
+def pretty_print_json(data: JSONData) -> str:
     """
     Pretty print JSON data.
     
@@ -254,10 +261,10 @@ def pretty_print_json(data):
     """
     return json.dumps(data, indent=2, ensure_ascii=False)
 
-def main():
+def main() -> None:
     """Run examples to test your functions."""
     # Create a sample JSON file
-    sample_data = {
+    sample_data: Dict[str, Any] = {
         "people": [
             {"id": 1, "name": "John", "age": 30, "city": "New York"},
             {"id": 2, "name": "Jane", "age": 25, "city": "Los Angeles"},
@@ -266,7 +273,7 @@ def main():
         "organization": "Example Corp",
         "created_at": "2023-06-15"
     }
-    sample_file = "sample.json"
+    sample_file: str = "sample.json"
     write_json_file(sample_file, sample_data)
     print(f"Created sample JSON file: {sample_file}")
     
@@ -277,7 +284,7 @@ def main():
     
     # Update JSON file
     print("\nUpdating JSON file:")
-    update_dict = {
+    update_dict: Dict[str, str] = {
         "organization": "New Corp",
         "updated_at": "2023-06-16"
     }
@@ -291,7 +298,7 @@ def main():
     
     # Validate JSON
     print("\nValidating JSON against schema:")
-    schema = {
+    schema: SchemaType = {
         "people": {"type": "list", "required": True},
         "organization": {"type": "str", "required": True},
         "created_at": {"type": "str", "required": False}
@@ -306,4 +313,4 @@ def main():
     print(f"\nCleaned up sample file: {sample_file}")
 
 if __name__ == "__main__":
-    main()
+    main()  

@@ -7,6 +7,8 @@ advanced API interaction techniques.
 """
 
 import requests
+import aiohttp
+import asyncio
 import json
 import os
 import time
@@ -393,9 +395,9 @@ class MultiAPIClient:
             logger.error(f"Invalid JSON response from {url}")
             raise requests.exceptions.RequestException("Invalid JSON response")
     
-    def fetch_parallel_data(self, requests_config):
+    async def fetch_parallel_data_async(self, requests_config):
         """
-        Fetch data from multiple APIs in parallel.
+        Fetch data from multiple APIs in parallel using async/await.
         
         Args:
             requests_config (list): List of request configurations
@@ -415,18 +417,28 @@ class MultiAPIClient:
         Raises:
             Exception: If any request fails
         """
-        def make_single_request(config):
+        async def make_single_async_request(session, config):
             try:
-                return {
-                    'success': True,
-                    'data': self._make_request(
-                        url=config['url'],
-                        params=config.get('params'),
-                        headers=config.get('headers'),
-                        method=config.get('method', 'GET')
-                    ),
-                    'config': config
-                }
+                method = config.get('method', 'GET').lower()
+                timeout = aiohttp.ClientTimeout(total=30)
+                
+                async with session.request(
+                    method=method,
+                    url=config['url'],
+                    params=config.get('params'),
+                    headers=config.get('headers'),
+                    timeout=timeout
+                ) as response:
+                    response.raise_for_status()
+                    data = await response.json()
+                    
+                    return {
+                        'success': True,
+                        'data': data,
+                        'config': config,
+                        'status_code': response.status
+                    }
+                    
             except Exception as e:
                 return {
                     'success': False,
@@ -434,18 +446,154 @@ class MultiAPIClient:
                     'config': config
                 }
         
-        logger.info(f"Making {len(requests_config)} parallel requests")
+        logger.info(f"Making {len(requests_config)} parallel async requests")
         
-        with ThreadPoolExecutor(max_workers=min(len(requests_config), 10)) as executor:
-            results = list(executor.map(make_single_request, requests_config))
+        # Create aiohttp session with connection pooling
+        connector = aiohttp.TCPConnector(
+            limit=100,  # Total connection pool size
+            limit_per_host=20,  # Connections per host
+            ttl_dns_cache=300,  # DNS cache TTL
+            use_dns_cache=True
+        )
         
-        # Check if any requests failed
-        failed_requests = [r for r in results if not r['success']]
+        async with aiohttp.ClientSession(
+            connector=connector,
+            timeout=aiohttp.ClientTimeout(total=30)
+        ) as session:
+            # Create tasks for all requests
+            tasks = [
+                make_single_async_request(session, config) 
+                for config in requests_config
+            ]
+            
+            # Execute all requests concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Handle any exceptions that occurred
+        processed_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                processed_results.append({
+                    'success': False,
+                    'error': str(result),
+                    'config': None
+                })
+            else:
+                processed_results.append(result)
+        
+        failed_requests = [r for r in processed_results if not r['success']]
         if failed_requests:
-            logger.warning(f"{len(failed_requests)} out of {len(requests_config)} requests failed")
+            logger.warning(f"{len(failed_requests)} out of {len(requests_config)} async requests failed")
         
-        logger.info(f"Completed {len(results)} parallel requests")
-        return results
+        logger.info(f"Completed {len(processed_results)} parallel async requests")
+        return processed_results
+    
+    async def combine_data_async(self, location, stock_symbols=None):
+        """
+        Combine data from multiple APIs using async requests.
+        
+        Args:
+            location (str): Location for weather and news
+            stock_symbols (list, optional): Stock symbols to include
+            
+        Returns:
+            dict: Combined data from multiple APIs
+        """
+        logger.info(f"Combining data asynchronously for location: {location}")
+        
+        # Prepare all requests
+        requests_config = []
+        
+        # Weather request
+        if 'weather' in self.apis:
+            weather_config = self.apis['weather']
+            weather_url = urljoin(weather_config['base_url'], weather_config['endpoints']['current'])
+            requests_config.append({
+                'id': 'weather',
+                'url': weather_url,
+                'params': {
+                    'q': location,
+                    'appid': weather_config['api_key'],
+                    'units': 'metric'
+                }
+            })
+        
+        # News request
+        if 'news' in self.apis:
+            news_config = self.apis['news']
+            news_url = urljoin(news_config['base_url'], news_config['endpoints']['everything'])
+            requests_config.append({
+                'id': 'news',
+                'url': news_url,
+                'params': {
+                    'q': location,
+                    'apiKey': news_config['api_key'],
+                    'pageSize': 5
+                }
+            })
+        
+        # Stock requests
+        if stock_symbols and 'stocks' in self.apis:
+            stocks_config = self.apis['stocks']
+            for symbol in stock_symbols:
+                requests_config.append({
+                    'id': f'stock_{symbol}',
+                    'url': stocks_config['base_url'],
+                    'params': {
+                        'function': 'TIME_SERIES_DAILY',
+                        'symbol': symbol,
+                        'apikey': stocks_config['api_key'],
+                        'outputsize': 'compact'
+                    }
+                })
+        
+        # Execute all requests in parallel
+        results = await self.fetch_parallel_data_async(requests_config)
+        
+        # Organize results
+        combined_data = {
+            'location': location,
+            'timestamp': datetime.now().isoformat(),
+            'weather': None,
+            'news': [],
+            'stocks': {}
+        }
+        
+        for result in results:
+            if not result['success']:
+                logger.warning(f"Request failed: {result.get('error')}")
+                continue
+                
+            config = result['config']
+            request_id = config.get('id', '')
+            data = result['data']
+            
+            if request_id == 'weather':
+                combined_data['weather'] = data
+            elif request_id == 'news':
+                combined_data['news'] = data.get('articles', [])
+            elif request_id.startswith('stock_'):
+                symbol = request_id.replace('stock_', '')
+                # Process stock data
+                time_series_key = 'Time Series (Daily)'
+                if time_series_key in data:
+                    time_series = data[time_series_key]
+                    latest_date = max(time_series.keys()) if time_series else None
+                    latest_price = None
+                    if latest_date:
+                        latest_data = time_series[latest_date]
+                        latest_price = float(latest_data['4. close'])
+                    
+                    combined_data['stocks'][symbol] = {
+                        'symbol': symbol,
+                        'metadata': data.get('Meta Data', {}),
+                        'data': time_series,
+                        'latest_date': latest_date,
+                        'latest_price': latest_price
+                    }
+        
+        logger.info("Successfully combined data from multiple APIs asynchronously")
+        return combined_data
 
 
 class DataAnalyzer:

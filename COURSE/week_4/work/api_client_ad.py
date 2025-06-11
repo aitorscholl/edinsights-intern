@@ -13,6 +13,26 @@ import logging
 from urllib.parse import urljoin
 import base64
 
+class APIClientConfig:
+    """Configuration class for API client settings."""
+    
+    def __init__(self, 
+                 timeout=30,
+                 max_retries=3,
+                 retry_delay=1,
+                 verify_ssl=True,
+                 log_level=logging.INFO,
+                 rate_limit_requests_per_second=None,
+                 default_headers=None):
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.verify_ssl = verify_ssl
+        self.log_level = log_level
+        self.rate_limit_requests_per_second = rate_limit_requests_per_second
+        self.default_headers = default_headers or {}
+
+
 class APIClient:
     """
     A class for interacting with RESTful APIs.
@@ -20,8 +40,9 @@ class APIClient:
     Attributes:
         base_url (str): The base URL of the API
         headers (dict): Default headers to send with requests
-        timeout (int): Default timeout for requests in seconds
+        config (APIClientConfig): Configuration settings
         logger (logging.Logger): Logger for the client
+        session (requests.Session): Persistent session for connection pooling
         
     Methods:
         get: Send a GET request
@@ -32,21 +53,28 @@ class APIClient:
         set_auth_token: Set an authentication token
     """
     
-    def __init__(self, base_url, auth_token=None, timeout=10):
+    def __init__(self, base_url, auth_token=None, config=None):
         """
         Initialize the API client.
         
         Args:
             base_url (str): The base URL of the API
             auth_token (str, optional): Authentication token. Defaults to None.
-            timeout (int, optional): Default timeout in seconds. Defaults to 10.
+            config (APIClientConfig, optional): Configuration object. Defaults to None.
         """
         self.base_url = base_url.rstrip('/') + '/'
-        self.timeout = timeout
+        self.config = config or APIClientConfig()
+        self.last_request_time = 0
+        
+        # Use session for connection pooling and better performance
+        self.session = requests.Session()
+        
+        # Set up default headers
         self.headers = {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'APIClient/1.0'
+            'User-Agent': 'APIClient/2.0',
+            **self.config.default_headers
         }
         
         # Set up logging
@@ -56,11 +84,21 @@ class APIClient:
             formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
-            self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(self.config.log_level)
         
         # Set authentication token if provided
         if auth_token:
             self.set_auth_token(auth_token)
+    
+    def _rate_limit(self):
+        """Apply rate limiting if configured."""
+        if self.config.rate_limit_requests_per_second:
+            min_interval = 1.0 / self.config.rate_limit_requests_per_second
+            elapsed = time.time() - self.last_request_time
+            if elapsed < min_interval:
+                sleep_time = min_interval - elapsed
+                time.sleep(sleep_time)
+        self.last_request_time = time.time()
     
     def get(self, endpoint, params=None):
         """
@@ -80,12 +118,15 @@ class APIClient:
         url = urljoin(self.base_url, endpoint.lstrip('/'))
         self.logger.info(f"GET request to {url}")
         
+        self._rate_limit()
+        
         try:
-            response = requests.get(
+            response = self.session.get(
                 url,
                 params=params,
                 headers=self.headers,
-                timeout=self.timeout
+                timeout=self.config.timeout,
+                verify=self.config.verify_ssl
             )
             return self.handle_response(response)
         except requests.exceptions.RequestException as e:

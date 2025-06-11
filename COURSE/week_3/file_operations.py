@@ -7,6 +7,7 @@ This exercise focuses on reading, writing, and manipulating files in Python.
 
 import os
 import shutil
+import time
 
 def read_text_file(filepath):
     """
@@ -21,8 +22,11 @@ def read_text_file(filepath):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    with open(filepath, 'r', encoding='utf-8') as file:
+        return file.read()
 
 def write_text_file(filepath, content, mode='w'):
     """
@@ -39,8 +43,12 @@ def write_text_file(filepath, content, mode='w'):
     Raises:
         IOError: If writing to the file fails
     """
-    # YOUR CODE HERE
-    pass
+    try:
+        with open(filepath, mode, encoding='utf-8') as file:
+            file.write(content)
+        return True
+    except IOError as e:
+        raise IOError(f"Failed to write to file: {e}")
 
 def count_lines_words_chars(filepath):
     """
@@ -55,8 +63,20 @@ def count_lines_words_chars(filepath):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    line_count = 0
+    word_count = 0
+    char_count = 0
+    
+    with open(filepath, 'r', encoding='utf-8') as file:
+        for line in file:
+            line_count += 1
+            word_count += len(line.split())
+            char_count += len(line)
+    
+    return (line_count, word_count, char_count)
 
 def find_and_replace(filepath, old_text, new_text):
     """
@@ -73,8 +93,24 @@ def find_and_replace(filepath, old_text, new_text):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    # Read the file content
+    with open(filepath, 'r', encoding='utf-8') as file:
+        content = file.read()
+    
+    # Count replacements
+    replacement_count = content.count(old_text)
+    
+    # Replace text
+    new_content = content.replace(old_text, new_text)
+    
+    # Write back to file
+    with open(filepath, 'w', encoding='utf-8') as file:
+        file.write(new_content)
+    
+    return replacement_count
 
 def copy_file(source, destination, overwrite=False):
     """
@@ -92,8 +128,14 @@ def copy_file(source, destination, overwrite=False):
         FileNotFoundError: If the source file doesn't exist
         FileExistsError: If destination exists and overwrite is False
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(source):
+        raise FileNotFoundError(f"Source file not found: {source}")
+    
+    if os.path.exists(destination) and not overwrite:
+        raise FileExistsError(f"Destination file already exists: {destination}")
+    
+    shutil.copy2(source, destination)
+    return True
 
 def create_directory_structure(base_path, structure):
     """
@@ -110,8 +152,18 @@ def create_directory_structure(base_path, structure):
     Raises:
         IOError: If directory creation fails
     """
-    # YOUR CODE HERE
-    pass
+    try:
+        def create_dirs(current_path, struct):
+            for dir_name, substructure in struct.items():
+                dir_path = os.path.join(current_path, dir_name)
+                os.makedirs(dir_path, exist_ok=True)
+                if substructure:
+                    create_dirs(dir_path, substructure)
+        
+        create_dirs(base_path, structure)
+        return True
+    except Exception as e:
+        raise IOError(f"Failed to create directory structure: {e}")
 
 def get_file_info(filepath):
     """
@@ -131,8 +183,21 @@ def get_file_info(filepath):
     Raises:
         FileNotFoundError: If the file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    stat_info = os.stat(filepath)
+    is_dir = os.path.isdir(filepath)
+    
+    info = {
+        'size': stat_info.st_size,
+        'last_modified': stat_info.st_mtime,
+        'created': stat_info.st_ctime,
+        'is_directory': is_dir,
+        'extension': '' if is_dir else os.path.splitext(filepath)[1]
+    }
+    
+    return info
 
 def binary_file_copy(source, destination, chunk_size=1024):
     """
@@ -149,8 +214,21 @@ def binary_file_copy(source, destination, chunk_size=1024):
     Raises:
         FileNotFoundError: If the source file doesn't exist
     """
-    # YOUR CODE HERE
-    pass
+    if not os.path.exists(source):
+        raise FileNotFoundError(f"Source file not found: {source}")
+    
+    bytes_copied = 0
+    
+    with open(source, 'rb') as src_file:
+        with open(destination, 'wb') as dst_file:
+            while True:
+                chunk = src_file.read(chunk_size)
+                if not chunk:
+                    break
+                dst_file.write(chunk)
+                bytes_copied += len(chunk)
+    
+    return bytes_copied
 
 def main():
     """Run examples to test your functions."""
